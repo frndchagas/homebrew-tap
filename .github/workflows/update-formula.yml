@@ -1,0 +1,90 @@
+name: Update formula
+
+# Polling rather than a release webhook from codex-account: a cross-repo
+# dispatch needs a long-lived PAT stored here, and a tap that installs
+# credential tooling is a poor place to keep one. GITHUB_TOKEN can push to
+# this repository and nothing else.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Update codex-account to its latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          formula='Formula/codex-account.rb'
+          repo='frndchagas/codex-account'
+
+          tag="$(gh release view --repo "$repo" --json tagName --jq .tagName)"
+
+          # The tag ends up in a URL and in a sed replacement, so accept only
+          # the shape a release tag is supposed to have.
+          case "$tag" in
+            v[0-9]*)
+              case "$tag" in
+                *[!v0-9.]*)
+                  echo "refusing to use an unexpected tag name: '$tag'" >&2
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *)
+              echo "refusing to use an unexpected tag name: '$tag'" >&2
+              exit 1
+              ;;
+          esac
+
+          version="${tag#v}"
+          current="$(sed -n 's|.*/archive/refs/tags/v\(.*\)\.tar\.gz.*|\1|p' "$formula")"
+
+          if [ -z "$version" ] || [ -z "$current" ]; then
+            echo "could not determine versions (latest='$version', formula='$current')" >&2
+            exit 1
+          fi
+
+          if [ "$version" = "$current" ]; then
+            echo "Formula already at $version."
+            exit 0
+          fi
+
+          url="https://github.com/$repo/archive/refs/tags/$tag.tar.gz"
+          sha="$(curl -fsSL "$url" | shasum -a 256 | cut -d' ' -f1)"
+
+          if [ "${#sha}" -ne 64 ]; then
+            echo "refusing to write a sha256 of length ${#sha}: '$sha'" >&2
+            exit 1
+          fi
+
+          case "$sha" in
+            *[!0-9a-f]*)
+              echo "refusing to write a non-hex sha256: '$sha'" >&2
+              exit 1
+              ;;
+          esac
+
+          sed -i "s|^  url \".*\"|  url \"$url\"|" "$formula"
+          sed -i "s|^  sha256 \".*\"|  sha256 \"$sha\"|" "$formula"
+
+          # A formula that does not parse would break every install from this
+          # tap, so never push one.
+          ruby -c "$formula"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "$formula"
+          git commit -m "Update codex-account to $version"
+          git push
+
+          echo "Updated codex-account from $current to $version."
