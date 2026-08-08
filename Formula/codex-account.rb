@@ -1,8 +1,8 @@
 class CodexAccount < Formula
   desc "Switch between multiple local Codex sign-ins without revoking them"
   homepage "https://github.com/frndchagas/codex-account"
-  url "https://github.com/frndchagas/codex-account/archive/refs/tags/v0.2.0.tar.gz"
-  sha256 "f32a7d099022cb4121bae3ab4fde664d3ffef537033661cee45531aade183c7b"
+  url "https://github.com/frndchagas/codex-account/archive/refs/tags/v0.3.0.tar.gz"
+  sha256 "4c9d58e222df9d1e329e5e490b0f1586553aedc626188995ed4b6a264a54347a"
   license "MIT"
   head "https://github.com/frndchagas/codex-account.git", branch: "main"
 
